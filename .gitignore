@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Build artefacts (LAB.pdf and figures/*.pdf are committed)
+*.aux
+*.log
+*.out
+*.toc

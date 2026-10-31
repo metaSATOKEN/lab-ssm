@@ -1,0 +1,337 @@
+{
+  "status": "PASS",
+  "printed_numeric_values_verified": 244,
+  "saved_json_files_verified": 38,
+  "rank_counts": {
+    "model_budget_cells": 15,
+    "LAB_first": 14,
+    "continuous_order_reproduced": 0
+  },
+  "ranking": {
+    "mamba-130m-hf": {
+      "4": [
+        "full_A",
+        "uniform",
+        "proxy_correct",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ]
+    },
+    "mamba-370m-hf": {
+      "4": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ]
+    },
+    "mamba-790m-hf": {
+      "4": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "proxy_C2",
+        "uniform",
+        "anti_full"
+      ]
+    },
+    "mamba-1.4b-hf": {
+      "4": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ]
+    },
+    "mamba-2.8b-hf": {
+      "4": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ]
+    },
+    "c8c_falcon_mamba_7b": {
+      "4": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "proxy_C2",
+        "anti_full"
+      ]
+    },
+    "c8d_jamba_mini": {
+      "4": [
+        "full_A",
+        "uniform",
+        "proxy_correct",
+        "proxy_C2",
+        "anti_full"
+      ],
+      "6": [
+        "full_A",
+        "proxy_correct",
+        "proxy_C2",
+        "uniform",
+        "anti_full"
+      ]
+    },
+    "zamba2": {
+      "6": [
+        "proxy_C2",
+        "full_A",
+        "proxy_correct",
+        "uniform",
+        "anti_full"
+      ]
+    }
+  },
+  "frontiers": {
+    "mamba-130m-hf": {
+      "common_INT4_INT6": [
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ],
+      "all_saved_budgets": [
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ]
+    },
+    "mamba-370m-hf": {
+      "common_INT4_INT6": [
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ],
+      "all_saved_budgets": [
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ]
+    },
+    "mamba-790m-hf": {
+      "common_INT4_INT6": [
+        [
+          4,
+          "uniform"
+        ],
+        [
+          4,
+          "proxy_correct"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ],
+      "all_saved_budgets": [
+        [
+          4,
+          "uniform"
+        ],
+        [
+          4,
+          "proxy_correct"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ]
+    },
+    "mamba-1.4b-hf": {
+      "common_INT4_INT6": [
+        [
+          4,
+          "uniform"
+        ],
+        [
+          4,
+          "proxy_C2"
+        ],
+        [
+          4,
+          "proxy_correct"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "proxy_correct"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ],
+      "all_saved_budgets": [
+        [
+          4,
+          "uniform"
+        ],
+        [
+          4,
+          "proxy_C2"
+        ],
+        [
+          4,
+          "proxy_correct"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "proxy_correct"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ]
+    },
+    "mamba-2.8b-hf": {
+      "common_INT4_INT6": [
+        [
+          4,
+          "uniform"
+        ],
+        [
+          4,
+          "proxy_C2"
+        ],
+        [
+          4,
+          "proxy_correct"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          6,
+          "proxy_correct"
+        ],
+        [
+          6,
+          "full_A"
+        ]
+      ],
+      "all_saved_budgets": [
+        [
+          3,
+          "uniform"
+        ],
+        [
+          3,
+          "proxy_C2"
+        ],
+        [
+          3,
+          "proxy_correct"
+        ],
+        [
+          3,
+          "full_A"
+        ],
+        [
+          4,
+          "full_A"
+        ],
+        [
+          5,
+          "full_A"
+        ],
+        [
+          6,
+          "full_A"
+        ],
+        [
+          8,
+          "proxy_correct"
+        ],
+        [
+          8,
+          "full_A"
+        ]
+      ]
+    }
+  }
+}

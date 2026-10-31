@@ -10,7 +10,7 @@ Quantisation errors in a recurrent state can affect later predictions. LAB assig
 
 ## 1. Introduction
 
-A transformer can compress a cached key or value once and read it many times. A recurrent state is different: rounding a component now changes the state supplied to the next update. Two state groups with the same current magnitude may therefore warrant different bit widths. An error can persist longer in one group, or have a larger effect when the model reads it out.
+A transformer can compress a cached key or value once and read it many times. A Mamba layer instead updates a fixed-size state as it reads each token. Rounding a component changes the state carried into the next update. Two state groups with the same current magnitude may therefore warrant different bit widths. An error can persist longer in one group, or have a larger effect when the model reads it out.
 
 LAB (Lyapunov-aware bit allocation) uses a short calibration sequence to estimate a group's persistence and its coupling to the output. Their combination gives an allocation score $R_g$. The state range $r_g$ determines the distance between quantisation levels at a given bit width. Accounting for both terms yields a different integer allocation from one based on $R_g$ alone. The question is whether this change buys better predictions at a useful storage budget.
 
@@ -62,13 +62,15 @@ $$
 
 where the per-step transition $\bar A_t$, input projection $\bar B_t$, and output projection $C_t$ are produced by input-dependent linear maps from $x_t$. For Mamba-1, the discretisation is $\bar A_t = \exp(dt_t \cdot A)$ with $A = -\exp(A_\mathrm{log})$ a per-state-unit negative real eigenvalue, and $\bar B_t = dt_t \cdot B_t$, where $dt_t \in \mathbb{R}_{>0}^{d_\mathrm{inner}}$ is the input-dependent time step. The hidden state $h_t \in \mathbb{R}^{d_\mathrm{inner} \times d_\mathrm{state}}$ is diagonal in the state-state direction, so each (channel $c$, state-unit $s$) is updated independently. Our analysis is per-(c, s); we use $g$ as a per-group index, with $g = (c, s)$ at the finest granularity.
 
-We consider the regime in which $h_t$ is quantised at every step before being used in the next update. Let $\hat h_t = \mathcal{Q}(h_t)$ be the quantised state and $\eta_t = \hat h_t - h_t$ the per-step quantisation noise. The next-step recurrence consumes $\hat h_{t-1}$ rather than $h_{t-1}$, so the per-step error $e_t = \hat h_t - h_t$ obeys the recurrence
+Compare two paths through one layer with the same input sequence and initial state ($e_0=0$). The reference follows the recurrence above. On the quantised path, the previous state gives the candidate $u_t=\bar A_t\hat h_{t-1}+\bar B_t x_t$. The quantiser returns $\hat h_t=\mathcal Q(u_t)$ for the readout and the next update.
+
+The local quantisation error is $\eta_t=\hat h_t-u_t$. The accumulated error is $e_t=\hat h_t-h_t$, the difference between the two paths at the same step. Adding and subtracting $u_t$ gives
 
 $$
-e_t \;=\; \bar A_t\,e_{t-1} \;+\; \eta_t.
+e_t = (u_t-h_t)+(\hat h_t-u_t) = \bar A_t e_{t-1}+\eta_t .
 $$
 
-The error is updated by the same $\bar A_t$ that updates the state, driven by the per-step quantisation noise $\eta_t$. This error recurrence is the central object of our analysis.
+The first term propagates earlier errors. The second accounts for rounding and any clipping at this step.
 
 ### 3.2 The Lyapunov Bound on Accumulated Noise
 
@@ -206,7 +208,7 @@ The first calibration step measures the per-(c, s) spectral radius $\rho_g$ of t
 
 The empirical long-memory tail ($\rho_g > 0.95$) covers $18.6 \,\%$ of the 5,242,880 per-(c, s) state units in Mamba-2.8B-hf, fifty times larger than the $0.4 \,\%$ the static estimator predicts. The very-long-memory tail ($\rho_g > 0.999$) goes from zero units in the static estimate to 165,816 units in the empirical estimate. The gap arises because per-layer median $dt$ observed empirically is in the $0.017$ to $0.125$ range, often well below the static assumption of $0.1$; the contraction factor $\exp(-dt \cdot |A|)$ is then much closer to one.
 
-The empirical $\rho_g$ distribution also exhibits strong per-layer heterogeneity. Median $\rho_g$ across the 64 layers traces a U-shape: short-memory layers at the input end ($\rho_g$ p50 $\approx 0.60$ at layer 0), a long-memory core in the middle ($\rho_g$ p50 $\approx 0.88$ at layers 32 and 40), and short-memory layers again at the output end ($\rho_g$ p50 $\approx 0.39$ at layer 56). We do not in this paper attempt to interpret what each layer encodes in linguistic terms; we report the U-shape as an empirical structural fact and note that it motivates a per-layer baseline term in the bit allocator, which the shift normalisation of §3.5 implicitly provides.
+The empirical $\rho_g$ distribution also exhibits strong per-layer heterogeneity. Median $\rho_g$ across the 64 layers traces a U-shape: short-memory layers at the input end ($\rho_g$ p50 $\approx 0.60$ at layer 0), a long-memory core in the middle ($\rho_g$ p50 $\approx 0.88$ at layers 32 and 40), and short-memory layers again at the output end ($\rho_g$ p50 $\approx 0.39$ at layer 56). These layer differences enter the allocation through the calibrated group statistics. The shift in §3.5 is shared across layers.
 
 The conclusion of §4.1 is that the empirical, input-dependent $\rho_g$ is the right input to the bit allocator, and that the long-memory minority is sufficiently large (in the hundreds of thousands of state units, not a handful) that protecting it with extra bits is the central design challenge. Figure 1(a) summarises the empirical $\rho_g$ distribution; Figure 1(b) anticipates the output-coupling heterogeneity discussed next.
 
@@ -234,11 +236,18 @@ Per-layer $\mathrm{Pearson}(\log \Gamma_s)$ is concentrated in $0.92$ to $1.00$ 
 
 On the initial, score-only rule, 77.54% of state units had the same extra-bit tier under both calibrations. This missed the prespecified 80% threshold, although most differences were one bit. The archived test used $\lceil\log_2 R_g\rceil_+$; it did not compare the train and validation allocations from §3.5. Stability under the range-aware rule and across corpora remains open.
 
-### 4.4 State-Step Quantisation in the Patched `slow_forward`
+### 4.4 Sensitivity to Gaussian noise in the recurrent state
 
-To test whether the score identifies sensitive groups, the initial experiment injected Gaussian noise into each recurrent update. Five profiles distributed the perturbations differently. The joint profile, stored here as `full`, scales the relative noise as $R_g^{-1/2}$. It is neither of the two integer rules. At relative scale 0.10 the changes in perplexity were:
+To test whether the score identifies sensitive groups, we added a fresh Gaussian perturbation to each group after the state update. The perturbed state supplied both the current readout and the next update. In this continuous-noise experiment, let $a_g$ denote a profile's shape in the table below. We set the noise standard deviation in group $g$ to
 
-| profile | $\sigma_g$ shape | $\Delta\mathrm{PPL}$ vs FP16 |
+$$
+\sigma_g = \alpha\,\mathrm{RMS}(h_g)\,
+           \frac{a_g}{\sqrt{\langle a^2\rangle_g}} .
+$$
+
+The denominator is the RMS of the shape across all state units and layers. With $\alpha=0.10$, uniform noise has a standard deviation of 10% of each group's calibrated state RMS. Each alternative profile has the same RMS relative intensity across units, with more noise in some groups and less in others. The joint profile (`full`) uses $a_g=R_g^{-1/2}$.
+
+| profile | Relative noise shape $a_g$ | $\Delta\mathrm{PPL}$ vs FP16 |
 |:---|:---|---:|
 | **full** (continuous) | $\sqrt{(1 - \rho_g)/\Gamma_g}$ | $\mathbf{+0.351 \,\%}$ |
 | Proxy (sqrt) | $\sqrt{1 - \rho_g}$ | $+2.850 \,\%$ |
@@ -266,7 +275,16 @@ For the joint profile, doubling the noise multiplied the relative PPL increase b
 
 ### 4.6 Integer allocation at fixed range
 
-The original C4 sweep reported 15 wins for the *initial* integer rule over five budgets and three range multipliers. The saved integer rerun measures LAB at **one** multiplier ($k=7$) and five budgets. Table entries below are relative PPL increases, using the same ten evaluation windows. The ratio is uniform ΔPPL divided by LAB ΔPPL.
+On Mamba-2.8B, LAB uses the group widths $b_g$ from §3.5. All five methods apply the same quantiser once the widths are set. Write $m_g=2^{b_g-1}$ and let $r_g=k\,\mathrm{RMS}(h_g)$ be the calibrated range. For a post-update value $u_t^{(g)}$, the patched forward pass uses the grid spacing $\Delta_g=\max(r_g/m_g,10^{-6})$ and computes
+
+$$
+q_g=\mathrm{clip}\!\left(\mathrm{round}(u_t^{(g)}/\Delta_g),-m_g,m_g-1\right),
+\qquad \hat h_t^{(g)}=\Delta_g q_g .
+$$
+
+Rounding selects the nearest integer (ties to even), and clipping keeps the code within the signed $b_g$-bit range, which includes zero. The forward pass reads out the dequantised FP32 value and carries it into the next token update. Section 5.2 describes the chunk-boundary variant for Zamba2.
+
+The original C4 sweep reported 15 wins for the *initial* integer rule over five budgets and three range multipliers. The saved rerun evaluates LAB at $k=7$ over all five budgets on the same ten windows. Entries are relative PPL increases, and the ratio divides the uniform increase by the LAB increase.
 
 | profile | INT3 | INT4 | INT5 | INT6 | INT8 |
 |:---|---:|---:|---:|---:|---:|
@@ -355,7 +373,9 @@ Perplexity and compression answer different questions. PPL was measured by quant
 
 ### 6.1 Storage model
 
-If the measured mean width is $\bar b$, a payload-only estimate gives $16/\bar b$ relative to FP16. The layout also stores a 16-bit range and a 4-bit width per group. Sharing those 20 metadata bits over 100 stored states gives an effective 0.2 bits per unit per state. Our reported **metadata-inclusive** compression is therefore $16/(\bar b+0.2)$. The appropriate term for a different number $N$ of stored states is $20/N$. The apparent benefit depends on this amortisation assumption. We apply the same convention at INT4 and INT6.
+With mean width $\bar b$, the state values alone give an estimated compression of $16/\bar b$ relative to FP16. Each group also needs a 16-bit range and a 4-bit width. If $N$ separately stored states share that metadata, its cost per group per state is $20/N$ bits. The metadata-inclusive compression is therefore $16/(\bar b+20/N)$.
+
+For both INT4 and INT6 we use $N=100$, as in a cache that retains 100 chunk-boundary states with the same calibration. This gives the $0.2$-bit overhead used in the tables. A single sequence that overwrites its only state at every token has $N=1$ under the same accounting, however many tokens it processes.
 
 ### 6.2 Lyapunov-vs-Range Factorisation on Mamba-2.8B-hf
 
@@ -485,17 +505,17 @@ Zhao et al. [2025] studied recurrent-state clipping on small S4D models. Here th
 
 ### 7.5 What the recorded trajectories show
 
-The earlier C10b diagnostic recorded summary statistics *before* clipping at sampled token positions in seven layers (0, 16, 32, 40, 48, 56, 63). The earlier C10 post-clip counts cannot measure natural threshold crossings. For the figure we use C10b's patched, intervention-off trajectory: it uses neither integer allocator. These time courses describe the logged window and are not four-window averages.
+Figure 5 follows seven layers (0, 16, 32, 40, 48, 56, 63) through one logged window with the intervention switched off. C10b sampled the state *before* clipping, which exposes natural range crossings that the earlier C10 post-clip counts could miss.
+
+![Sampled C10b trajectories at 32K, with interventions off. Panels show the 99th percentile of state magnitude, the 99th percentile of transition magnitude, and the pre-clip fraction exceeding the calibrated range. Each curve summarises one layer.](figures/fig06_state_norm_trajectory.png){#fig:trajectories width=96% latex-placement="!ht"}
 
 In the off path, the 99th percentile of state magnitude rose from the first to the final recorded position in every sampled layer at 32K, by 68.6% in layer 0 and 245.2% in layer 56. At the final position, the fraction of state units above their calibrated range varied from 0.027% to 2.272% across layers. A final-position statistic is different from the maximum over time: layer 63 reached about 4.66% at a sampled position despite ending near 0.027%.
 
-Clipping often reduced later crossings: at the 32K endpoint in layer 0, the off and clip-only fractions were 2.272% and 0.642%. The direction was not universal: in layer 48 the fractions were 0.184% and 0.199%. Transition-magnitude percentiles and crossing fractions are separate layer summaries. They show where near-unit transitions and range excursions occur, but do not identify whether the same units exhibit both or how much each unit contributes to the PPL change.
-
-![Sampled C10b trajectories at 32K, with interventions off. Panels show the 99th percentile of state magnitude, the 99th percentile of transition magnitude, and the pre-clip fraction exceeding the calibrated range. Each curve represents a layer; a curve does not track individual state units.](figures/fig06_state_norm_trajectory.png)
+At the 32K endpoint, clipping reduced the crossing fraction in layer 0 (2.272% off, 0.642% clip-only). In layer 48 the fraction rose slightly (0.184% off, 0.199% clip-only). Transition-magnitude percentiles and crossing fractions are separate layer summaries. They show where near-unit transitions and range excursions occur, but do not identify whether the same units exhibit both or how much each unit contributes to the PPL change.
 
 ### 7.6 Storage and quality at 32K
 
-On the four-window evaluation, clip-only retained FP16 state storage and had the lowest PPL of the four conditions (10.51). LAB at INT6 had PPL 10.97 and an estimated 2.44× state-cache compression on 2.8B under the §6.1 convention. This pairs a numerical quality measurement with storage accounting; it is not a benchmark of a packed implementation.
+On the four 32K windows, clipping alone kept FP16 storage and gave the lowest PPL (10.51). INT6 LAB gave 10.97. Its estimated 2.44× state-cache compression on Mamba-2.8B assumes shared metadata for 100 stored states (§6.1).
 
 ## 8. Discussion
 
@@ -505,7 +525,7 @@ A persistence-weighted score and calibrated range provide a useful integer alloc
 
 The strongest cross-model statement is about first place at the tested nominal budgets. The ordering of the other methods varies, and the PPL costs on Falcon exceed those on the state-spaces family. Zamba2 was measured at chunk boundaries and at one budget. All transfer ranks are descriptive comparisons of saved aggregates. Single-corpus calibration, small evaluation sets, and the absence of seed-level uncertainty estimates limit generalisation. The 77.5% first-round tier agreement does not quantify the stability of LAB tiers.
 
-The model of storage amortises metadata over 100 states. For short histories or different layouts the savings change. The Gaussian-noise scaling result measures a continuous channel; it does not establish an integer-bit PPL exponent. Likewise, the large long-context difference between clipped and unclipped states does not identify a unique causal mechanism.
+The storage ratios depend on how many separately stored states share the metadata (§6.1). The Gaussian-noise scaling result measures a continuous channel; it does not establish an integer-bit PPL exponent. Likewise, the large long-context difference between clipped and unclipped states does not identify a unique causal mechanism.
 
 ### 8.2 Open questions
 

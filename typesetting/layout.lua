@@ -17,3 +17,13 @@ function Table(t)
  if widths then for i,v in ipairs(widths) do t.colspecs[i]={t.colspecs[i][1],v} end end
  return t
 end
+
+function Header(h)
+ if h.identifier == "what-the-recorded-trajectories-show" then
+  -- Give the section opening and its trajectory plot room together.
+  return {pandoc.RawBlock("latex", "\\ifdim\\dimexpr\\pagegoal-\\pagetotal\\relax<0.7\\textheight\\clearpage\\fi"), h}
+ elseif h.identifier == "references" then
+  -- Keep the body type size and separate bibliography entries with a smaller gap.
+  return {h, pandoc.RawBlock("latex", "\\setlength{\\parskip}{2pt plus 1pt}")}
+ end
+end

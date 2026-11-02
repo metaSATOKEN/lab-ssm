@@ -6,8 +6,8 @@ Two panels on Mamba-2.8B-hf calibrated from 1024 tokens of WikiText-2 train:
 
   (a) Empirical spectral-radius distribution across all 5,242,880 (c, s)
       state units, in six rho buckets. The right-most two buckets contain
-      the long-memory tail (>= 0.99) where (1-rho)^-1 amplification is
-      orders of magnitude.
+      the long-memory tail (>= 0.99) where the empirical persistence weight (1-rho)^-1 is
+      at least 100.
 
   (b) Output-coupling heterogeneity across the 64 layers. Each bar is the
       Gamma_max / Gamma_min ratio within a single layer's 16 state indices.
@@ -145,7 +145,7 @@ def main():
     )
 
     fig.suptitle(
-        "Why a uniform bit budget is the wrong default for SSM state quantisation",
+        "Persistence and output coupling across Mamba-2.8B state groups",
         fontsize=11.5, y=1.02, fontweight="bold",
     )
 

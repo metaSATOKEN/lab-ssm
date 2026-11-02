@@ -1,12 +1,12 @@
 ---
 title: "Lyapunov-Aware Bit Allocation for State-Space Model Quantisation"
 author: "Kentaro Sato`\\\\`{=latex} `\\texttt{info@metaclan.jp}`{=latex}"
-date: "2026-10-31"
+date: "2026-11-02"
 ---
 
 ## Abstract
 
-Quantisation errors in a recurrent state can affect later predictions. LAB assigns bits to state groups using three quantities measured during a short calibration pass: recurrence stability, output coupling, and state magnitude. Across five state-spaces Mamba models, the range-aware allocation at a nominal six bits yielded 2.44–2.65 times state-cache compression under an amortised metadata model, with perplexity increases of 3.35–3.98% on WikiText-2. At a nominal four bits the corresponding ranges were 3.52–3.96 times and 7.73–10.65%. The recommended allocation had the lowest perplexity increase among the five compared methods on seven models at both budgets; the eighth, Zamba2, was tested at six bits only, where another method was marginally better. An ablation on Mamba-2.8B showed that both the recurrence-based allocation score and the placement of the range correction contributed to performance. On two matched PG-19 windows, the recommended allocation outperformed uniform allocation at each of three context lengths. In a separate four-window comparison at 32K, clipping alone kept perplexity close to the quantised result. These measurements establish a quality–storage trade-off for the tested models; compression is calculated from the stored bit widths, while perplexity is measured with quantisation simulated in the forward pass.
+Quantisation errors in a recurrent state can affect later predictions. LAB assigns bits to state groups using three quantities measured during a short calibration pass: recurrence stability, output coupling, and state magnitude. Across five state-spaces Mamba models, the range-aware allocation at a nominal six bits yielded an estimated 2.44–2.65 times state-cache compression when 100 separately stored states share the same per-group metadata, with perplexity increases of 3.35–3.98% on WikiText-2. At a nominal four bits the corresponding ranges were 3.52–3.96 times and 7.73–10.65%. The recommended allocation had the lowest perplexity increase among the five compared methods on seven models at both budgets; the eighth, Zamba2, was tested at six bits only, where another method was marginally better. An ablation on Mamba-2.8B showed that both the recurrence-based allocation score and the placement of the range correction contributed to performance. On two matched PG-19 windows, the recommended allocation outperformed uniform allocation at each of three context lengths. In a separate four-window comparison at 32K, clipping alone kept perplexity close to the quantised result. These measurements establish a quality–storage trade-off for the tested models; compression is calculated from the stored bit widths, while perplexity is measured with quantisation simulated in the forward pass.
 
 ## 1. Introduction
 
@@ -74,22 +74,16 @@ The first term propagates earlier errors. The second accounts for rounding and a
 
 ### 3.2 The Lyapunov Bound on Accumulated Noise
 
-For one diagonal state group, suppose $|\bar A_t^{(g)}|\leq\rho_g<1$ and the injected noise has zero conditional mean, variance $\sigma_q^{(g)\,2}$, and is uncorrelated with the incoming state error after multiplication by the transition. Iterating the second-moment bound gives
+For a single group $g$, let $\rho_\star<1$ bound the transition magnitude at every step. Assume the injected noise has zero conditional mean, variance $\sigma_q^{(g)\,2}$, and zero correlation with the incoming error after multiplication by the transition. Starting from $e_0=0$, iteration gives
 
 $$
-\mathbb{E}\bigl[(e_t^{(g)})^2\bigr]
-\;\le\;
-\frac{\sigma_q^{(g)\,2}}{1 - \rho_g^2}
-\;\approx\;
-\frac{\sigma_q^{(g)\,2}}{2\,(1 - \rho_g)}
-\quad(\rho_g \to 1).
+\mathbb E\bigl[(e_t^{(g)})^2\bigr]
+\;\le\; \frac{\sigma_q^{(g)\,2}}{1-\rho_\star^2}.
 $$
 
-The experiment uses the *empirical mean* transition magnitude as a persistence estimate. A mean is not a uniform bound on the transitions. The inequality motivates how we weight groups; it does not certify a variance bound for the measured model or an optimum for perplexity.
+For a target upper bound $V$ on accumulated mean-squared error, $\sigma_q^{(g)\,2}\le V(1-\rho_\star^2)$ suffices. As the transition bound approaches one, a smaller local noise variance is needed to obtain the same guarantee. Whether a uniform bit width meets a given tolerance also depends on the width and the state ranges.
 
-This is a discrete-time Lyapunov-type bound. The amplification factor $(1 - \rho_g)^{-1}$ has the same role as the convergence-rate factor in classical Lyapunov analysis of contraction maps: it characterises how rapidly the accumulated noise settles to its bounded equilibrium. As $\rho_g \to 1$, the per-step noise allowed for a target equilibrium error must scale as $\sqrt{1 - \rho_g}$, and the bit budget required to deliver such noise grows accordingly.
-
-The empirical calibration also has a long-memory tail. On Mamba-2.8B-hf evaluated on 1024 tokens of WikiText-2 train, 18.6 % of the 5,242,880 per-(c, s) state units satisfy $\rho_g > 0.95$ and 3.2 % satisfy $\rho_g > 0.999$ (§4.1). For units above 0.999 the amplification factor is $10^3$ or larger, and a uniform per-element bit budget cannot deliver the per-step noise variance they require.
+In calibration we measure $\rho_g$, the *mean* transition magnitude. We use $1/(1-\rho_g)$ as a persistence weight, motivated by $1/(1-\rho_\star^2)\approx 1/[2(1-\rho_\star)]$ near one. On Mamba-2.8B-hf, 18.6% of the 5,242,880 state units had $\rho_g>0.95$ and 3.2% had $\rho_g>0.999$ on 1024 WikiText-2 training tokens (§4.1). In the latter group the empirical weight exceeds $10^3$. Certifying the variance bound for those units would require a bound on their individual transitions.
 
 ### 3.3 The Output Coupling and the Visible Error
 
@@ -117,26 +111,18 @@ $$
 
 with the per-state-unit output coupling magnitude $\Gamma_s = \mathbb{E}_t[(C_t^{(s)})^2]$. We use $\Gamma_g$ for the per-group quantity, where $\Gamma_g = \Gamma_s$ at our (c, s) granularity (the coupling is shared within a column).
 
-Combining §3.2 and the present subsection, the per-(c, s) contribution to the visible mean-squared readout error is
+We weight local noise by both its estimated persistence and its visibility at the readout. This gives the score
 
 $$
-\Gamma_g \cdot \mathbb{E}\bigl[(e_t^{(g)})^2\bigr]
-\;\propto\;
-\frac{\Gamma_g \cdot \sigma_q^{(g)\,2}}{1 - \rho_g}
-\;=\;
-R_g \cdot \sigma_q^{(g)\,2},
-\qquad
-\boxed{R_g \;=\; \frac{\Gamma_g}{1 - \rho_g}}.
+\boxed{R_g = \frac{\Gamma_g}{1-\rho_g}} .
 $$
 
 ### 3.4 The Bit-Budget-Optimal Allocation
 
-The total visible mean-squared readout error under per-group i.i.d. quantisation noise is
+Our surrogate for the visible mean-squared error is
 
 $$
-\mathrm{MSE}_\mathrm{total}
-\;\propto\;
-\sum_g R_g \cdot \sigma_q^{(g)\,2}.
+\mathcal L = \sum_g R_g\,\sigma_q^{(g)\,2}.
 $$
 
 In the fine-resolution approximation, the error variance of a uniform quantiser is proportional to $r_g^2 4^{-b_g}$. This approximation neglects clipping and discrete rounding effects. We set $r_g=7\,\mathrm{RMS}(h_g)$ in the integer reruns. The initial score-only experiments also explored other range multipliers; the saved reruns do not establish which multiplier is best for LAB.
@@ -161,7 +147,7 @@ $$
 
 ### 3.5 The Integer Realisation of the $R_g$ Surface
 
-The continuous optimum derived in §3.4 is $b_g \propto \tfrac{1}{2} \log_2 R_g + \log_2 r_g + \mathrm{const}$. For deployment-side bit budgeting we need an integer $b_g$ per group, fitting within a target average $b_0$ and bounded by a hardware-friendly minimum $b_\mathrm{min}$ to avoid sign-only quantisation. The strict continuous optimum of §3.4 is integerised directly:
+The continuous solution in §3.4 assigns width according to $\tfrac12\log_2 R_g+\log_2 r_g$, up to an additive constant. LAB uses this score to construct integer widths around the target mean $b_0$. Write $\lceil x\rceil_+=\max(0,\lceil x\rceil)$. The integer rule is
 
 $$
 \mathrm{extras}_g \;=\; \bigl\lceil \tfrac{1}{2} \log_2 R_g \;+\; \log_2 r_g \;-\; \overline{\log_2 r_g} \bigr\rceil_+,
@@ -169,15 +155,9 @@ $$
 b_g \;=\; \mathrm{round}\!\bigl(b_0 + \mathrm{extras}_g - \overline{\mathrm{extras}}\bigr)\Big|_{[b_\mathrm{min},\,16]},
 $$
 
-where $\overline{\log_2 r_g}$ denotes the global mean of $\log_2 r_g$ over all $(c, s)$ groups model-wide,
-$$
-\overline{\log_2 r_g} \;=\; \frac{1}{N_g}\sum_g \log_2 r_g,
-$$
-i.e., the mean of the log values, *not* the log of the mean ($\log_2 \overline{r_g}$). It centres the per-group $\log_2 r_g$ correction at zero so the correction term does not itself shift the mean bit width. Similarly, $\overline{\mathrm{extras}}$ is the global mean of the integer extras and the outer shift normalisation $- \overline{\mathrm{extras}}$ rebalances toward $b_0$. This construction tracks the §3.4 continuous optimum directly and is the rounded-and-clamped integer analogue of that optimum on the $R_g$ surface; we do not claim it solves the exact discrete integer programme after rounding, $b_\mathrm{min}$ floor, and $16$-bit ceiling.
+Here $\overline{\log_2 r_g}$ is the mean of the log ranges across all groups in the model. The positive-part ceiling maps every nonpositive score to zero extra bits. Subtracting the mean extras then shifts the widths towards $b_0$. A final rounding and clamp to $[2,16]$ can leave the achieved mean above or below the target. This rule approximates the continuous allocation.
 
-The initial integer rule instead used $\lceil\log_2 R_g\rceil_+$ for the extra bits, with no range correction. In the seven rerun archives, the key for this initial rule is still usually `full`. The new rule in §3.5 is stored as `full_A` (C5b: `profile_full_A`; C9: `FP16_full_A`). We report measurements for these explicit keys rather than reading the legacy automated verdict on `full`. In the earlier, separately budget-matched C16 experiments the new rule was already present as `half_slope_rg`.
-
-For the principal integer comparisons we use one mean shift followed by rounding and clamping to [2, 16]. The resulting mean can differ from the nominal budget. The factorisation experiment uses a binary search for the shift and reports the mean actually achieved.
+The integer reruns store LAB as `full_A` (C5b: `profile_full_A`, C9: `FP16_full_A`). They retain the initial score-only allocator as `full`, with extras $\lceil\log_2 R_g\rceil_+$. We use the LAB rows for the reported comparisons. The separate C16 factorisation experiment calls LAB `half_slope_rg` and uses a binary search for the shift to bring the achieved mean closer to the target (§6.2).
 
 ### 3.6 Calibration
 
@@ -212,7 +192,7 @@ The empirical $\rho_g$ distribution also exhibits strong per-layer heterogeneity
 
 The conclusion of §4.1 is that the empirical, input-dependent $\rho_g$ is the right input to the bit allocator, and that the long-memory minority is sufficiently large (in the hundreds of thousands of state units, not a handful) that protecting it with extra bits is the central design challenge. Figure 1(a) summarises the empirical $\rho_g$ distribution; Figure 1(b) anticipates the output-coupling heterogeneity discussed next.
 
-![Why a uniform bit budget is the wrong default for SSM state quantisation, on Mamba-2.8B-hf calibrated from 1024 tokens of WikiText-2 train. **(a)** Empirical $\rho_g$ distribution across all 5,242,880 per-$(c, s)$ state units, in six $\rho_g$ buckets. The two right-most buckets contain the long-memory tail ($\rho_g \geq 0.99$, $8.87 \,\%$ of state units) where the $(1 - \rho_g)^{-1}$ amplification factor is at least two orders of magnitude. **(b)** Per-layer output-coupling heterogeneity: each bar is the within-layer $\Gamma_\mathrm{max} / \Gamma_\mathrm{min}$ ratio for one of the 64 Mamba mixers, sorted by ratio. The ratio ranges from $31\times$ at the lowest-spread layer to $9{,}144\times$ at the highest-spread layer, with median $452\times$. The combined per-$(c, s)$ surface $R_g = \Gamma_g / (1 - \rho_g)$ inherits both heavy tails and motivates the per-$(c, s)$ variable bit width of §3.](figures/fig01_R_distribution.png){#fig:R_distribution width=100%}
+![Persistence and output coupling in Mamba-2.8B-hf, calibrated on 1024 WikiText-2 training tokens. **(a)** Empirical $\rho_g$ distribution across all 5,242,880 per-$(c, s)$ state units, in six $\rho_g$ buckets. The two right-most buckets contain the long-memory tail ($\rho_g \geq 0.99$, $8.87 \,\%$ of state units) where the empirical persistence weight $(1-\rho_g)^{-1}$ is at least 100. **(b)** Per-layer output-coupling heterogeneity: each bar is the within-layer $\Gamma_\mathrm{max} / \Gamma_\mathrm{min}$ ratio for one of the 64 Mamba mixers, sorted by ratio. The ratio ranges from $31\times$ at the lowest-spread layer to $9{,}144\times$ at the highest-spread layer, with median $452\times$. The combined per-$(c, s)$ surface $R_g = \Gamma_g / (1 - \rho_g)$ inherits both heavy tails and motivates the per-$(c, s)$ variable bit width of §3.](figures/fig01_R_distribution.png){#fig:R_distribution width=100%}
 
 ### 4.2 Output-Coupling Extraction and the $R_g$ Surface
 
@@ -245,7 +225,7 @@ $$
            \frac{a_g}{\sqrt{\langle a^2\rangle_g}} .
 $$
 
-The denominator is the RMS of the shape across all state units and layers. With $\alpha=0.10$, uniform noise has a standard deviation of 10% of each group's calibrated state RMS. Each alternative profile has the same RMS relative intensity across units, with more noise in some groups and less in others. The joint profile (`full`) uses $a_g=R_g^{-1/2}$.
+The denominator is the RMS of the shape across all state units and layers. With $\alpha=0.10$, uniform noise has a standard deviation of 10% of each group's calibrated state RMS. Each alternative profile has the same RMS relative intensity across units, with more noise in some groups and less in others. In this Gaussian experiment, `full` labels the noise shape $a_g=R_g^{-1/2}$. The integer experiment assigns bit widths in §4.6.
 
 | profile | Relative noise shape $a_g$ | $\Delta\mathrm{PPL}$ vs FP16 |
 |:---|:---|---:|
@@ -284,7 +264,7 @@ $$
 
 Rounding selects the nearest integer (ties to even), and clipping keeps the code within the signed $b_g$-bit range, which includes zero. The forward pass reads out the dequantised FP32 value and carries it into the next token update. Section 5.2 describes the chunk-boundary variant for Zamba2.
 
-The original C4 sweep reported 15 wins for the *initial* integer rule over five budgets and three range multipliers. The saved rerun evaluates LAB at $k=7$ over all five budgets on the same ten windows. Entries are relative PPL increases, and the ratio divides the uniform increase by the LAB increase.
+The original C4 sweep reported 15 wins for the *initial* integer rule over five budgets and three range multipliers. The saved rerun evaluates LAB at $k=7$ over all five budgets on the same ten windows. Entries are percentage increases over FP16. The ratio compares these increases (for example, $18.68/3.98$ at INT6).
 
 | profile | INT3 | INT4 | INT5 | INT6 | INT8 |
 |:---|---:|---:|---:|---:|---:|
@@ -301,7 +281,7 @@ At the tested budgets, the first LAB configuration below a 10% PPL increase was 
 
 ## 5. Transfer of the integer allocation across models
 
-We compare LAB with four prespecified approaches to assigning integer widths: uniform allocation, two persistence-only proxies (`proxy_correct` and `proxy_C2`), and allocation in the opposite direction (`anti_full`). The literal `full` row retained in the rerun files is the legacy integer method and is outside this five-method comparison. For all rerun comparisons below, the range multiplier is seven, the minimum is two bits, and PPL is evaluated on WikiText-2 test at context length 1024.
+The four comparison rules use the same shift, rounding and width limits as LAB (§3.5). Let $P_g=1/(1-\rho_g)$. Before the shift, the extra bits are zero for uniform, $\lceil \tfrac12\log_2 P_g\rceil_+$ for Proxy (sqrt, `proxy_correct`), and $\lceil\log_2 P_g\rceil_+$ for Proxy (linear, `proxy_C2`). The opposite allocation (Anti, `anti_full`) uses $\lceil-\log_2 R_g\rceil$ and retains negative extras. We compare these four rules with the range-aware LAB row at $k=7$ on WikiText-2 test windows of 1024 tokens.
 
 ### 5.1 Five sizes of state-spaces Mamba-1
 
@@ -349,9 +329,9 @@ We test the bit allocator on Falcon-Mamba-7B (`tiiuae/falcon-mamba-7b`), the lar
 
 On ten windows at each budget, LAB had the smallest PPL increase. The uniform-to-LAB ΔPPL ratio was 1.93 at INT4 and 1.96 at INT6. The absolute penalties on Falcon were much larger than those on state-spaces Mamba. Uniform also outperformed proxy_C2 here, a direct counterexample to a universal ordering of the controls.
 
-### 5.4 Hybrid Architecture + MoE: AI21 Jamba-1.5-Mini
+### 5.4 Transfer to AI21 Jamba-Mini-1.6
 
-The widest stretch of the generalisation chain is Jamba-1.5-Mini (`ai21labs/AI21-Jamba-Mini-1.6`), a 52B-total / 12B-active hybrid model from a third release lineage. Jamba interleaves Mamba-1 mixers with transformer attention and MoE expert layers, and uses learnable RMSNorm modules (`mix.dt_layernorm`, `mix.b_layernorm`, `mix.c_layernorm`) instead of Falcon's weightless `rms_forward` to normalise $dt_\mathrm{raw}$, $B_t$, and $C_t$ before discretisation. The patched forward grew a third lineage branch detected via the `mix.dt_layernorm` attribute. Loaded in FP16 with `device_map="auto"` on a 102 GB GPU runtime, with mild CPU offload (about 84 GB VRAM resident); 28 Mamba-1 mixers were detected, interleaved with the attention and MoE layers (which were held at FP16 throughout, since the present paper does not quantise attention).
+We evaluated `ai21labs/AI21-Jamba-Mini-1.6`, a hybrid model with 52B total and 12B active parameters. Jamba interleaves Mamba-1 mixers with transformer attention and MoE expert layers, and uses learnable RMSNorm modules (`mix.dt_layernorm`, `mix.b_layernorm`, `mix.c_layernorm`) instead of Falcon's weightless `rms_forward` to normalise $dt_\mathrm{raw}$, $B_t$, and $C_t$ before discretisation. The patched forward grew a third lineage branch detected via the `mix.dt_layernorm` attribute. Loaded in FP16 with `device_map="auto"` on a 102 GB GPU runtime, with mild CPU offload (about 84 GB VRAM resident); 28 Mamba-1 mixers were detected, interleaved with the attention and MoE layers (which were held at FP16 throughout, since the present paper does not quantise attention).
 
 | profile | $b_0 = 4$ | $b_0 = 6$ |
 |:---|---:|---:|
@@ -471,7 +451,7 @@ We separate three measurements on Mamba-2.8B: a two-window comparison of LAB aga
 
 ### 7.1 Uniform versus LAB on the same two windows
 
-In the C7 rerun, both methods use nominal INT6 and are evaluated on the same two PG-19 windows at each length.
+In the C7 rerun both methods use nominal INT6 on the same two PG-19 windows at each length. Here the ratio divides the absolute PPL of uniform by that of LAB.
 
 | Context | LAB PPL | Uniform PPL | Uniform / LAB |
 | :--- | ---: | ---: | ---: |

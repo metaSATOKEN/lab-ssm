@@ -1,6 +1,6 @@
 # Lyapunov-Aware Bit Allocation for State-Space Model Quantisation
 
-Kentaro Sato · 31 October 2026 · [Paper (PDF)](LAB.pdf) · [Paper (Markdown)](LAB.md)
+Kentaro Sato · 2 November 2026 · [Paper (PDF)](LAB.pdf) · [Paper (Markdown)](LAB.md)
 
 **If two values in a model’s memory are equally large, should they get the same number of bits?** A Mamba model carries a numerical state from one token to the next. A rounding error in one part of that state can fade by the next token. An error of the same size elsewhere can survive many updates and change a later prediction.
 

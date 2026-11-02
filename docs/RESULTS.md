@@ -55,4 +55,4 @@ Earlier trajectories show range crossings in several layers. They summarise stat
 
 From the repository root, run `make verify` with Python 3.9 or later to check the tables against the saved JSON. Run `make pdf` to typeset the paper with Pandoc, XeLaTeX, TeX Gyre Termes and Latin Modern Mono. The vector figures are included. To regenerate them from the saved measurements, run `make figures` with NumPy and Matplotlib installed. Set `PYTHON` to select a Python interpreter.
 
-Kentaro Sato. *Lyapunov-Aware Bit Allocation for State-Space Model Quantisation*. 31 October 2026. [Contact](mailto:info@metaclan.jp) · [License](../LICENSE)
+Kentaro Sato. *Lyapunov-Aware Bit Allocation for State-Space Model Quantisation*. 2 November 2026. [Contact](mailto:info@metaclan.jp) · [License](../LICENSE)

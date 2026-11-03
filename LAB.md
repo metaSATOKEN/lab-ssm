@@ -515,6 +515,10 @@ Calibration stability across corpora, the relation between units with long memor
 
 Across five state-spaces sizes, allocating by persistence, output coupling, and calibrated range reduces the estimated size of the recurrent state cache while keeping the nominal-INT6 PPL penalty below 4% on the saved WikiText-2 evaluation. On PG-19, LAB also beats uniform allocation on matched windows. The clip-only comparison and the range ablations indicate which ingredients merit further study, without attributing the observed gains to a uniquely identified mechanism.
 
+## Data and code availability
+
+Code, saved results, and reproduction instructions are available at <https://github.com/metaSATOKEN/lab-ssm>. The [evidence map](https://github.com/metaSATOKEN/lab-ssm/blob/main/docs/EVIDENCE_MAP.md) connects the paper's figures and tables to their source files.
+
 ## Acknowledgments
 
 This work was conducted with substantial assistance from large language models (Claude, Anthropic) for experiment design, code generation, debugging, data analysis, and manuscript drafting. All experimental results were produced by executing code on real hardware (NVIDIA A100 via Google Colab) and verified by the author. The author takes full responsibility for the scientific claims and any errors in this work.

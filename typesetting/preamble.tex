@@ -1,4 +1,24 @@
-\setlength{\emergencystretch}{2em}
-\AtBeginEnvironment{longtable}{\small\setlength{\tabcolsep}{4pt}}
-\setcounter{topnumber}{3}
-\renewcommand{\topfraction}{0.9}
+\newcommand{\runningtitle}{LAB / STATE-SPACE MODEL QUANTISATION}
+\input{typesetting/article-style.tex}
+\AtBeginEnvironment{longtable}{\fontsize{9.3}{12}\selectfont\setlength{\tabcolsep}{3.3pt}}
+\makeatletter
+\renewcommand{\maketitle}{%
+  \thispagestyle{first}
+  {\raggedright\sffamily\bfseries\color{ink}\fontsize{22}{27}\selectfont\@title\par}
+  \smallskip{\bfseries Kentaro Sato}\par
+  {\small Contact: \href{mailto:info@metaclan.jp}{info@metaclan.jp}\par}
+  {\small\@date\par}\smallskip\hrule\medskip
+  \articlebody
+}
+\makeatother
+
+% Request room for a small table after the preceding paragraph has been set.
+\newcommand{\KeepTableSpace}[1]{%
+  \par\penalty-100\begingroup
+  \dimen0=\dimexpr\pagegoal-\pagetotal\relax
+  \ifdim\dimen0<#1\relax
+    \ifdim\dimen0>0pt\vfil\fi
+    \break
+  \fi
+  \endgroup
+}

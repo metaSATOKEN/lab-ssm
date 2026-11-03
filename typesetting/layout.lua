@@ -15,10 +15,22 @@ function Table(t)
  elseif n==4 and first:match("band") then widths={.19,.29,.30,.22}
  end
  if widths then for i,v in ipairs(widths) do t.colspecs[i]={t.colspecs[i][1],v} end end
+ -- Keep small tables intact when they fit on one page.
+ local rows = #t.head.rows
+ for _, body in ipairs(t.bodies) do rows = rows + #body.head + #body.body end
+ if rows <= 8 then
+  local height = (rows + 3) * 12
+  local guard = "\\KeepTableSpace{" .. height .. "pt}"
+  return {pandoc.RawBlock("latex", guard), t}
+ end
  return t
 end
 
 function Header(h)
+ h.level = math.max(1, h.level - 1)
+ if h.identifier == "introduction" then
+  return {pandoc.RawBlock("latex", "\\clearpage"), h}
+ end
  if h.identifier == "what-the-recorded-trajectories-show" then
   -- Give the section opening and its trajectory plot room together.
   return {pandoc.RawBlock("latex", "\\ifdim\\dimexpr\\pagegoal-\\pagetotal\\relax<0.7\\textheight\\clearpage\\fi"), h}
@@ -26,4 +38,5 @@ function Header(h)
   -- Keep the body type size and separate bibliography entries with a smaller gap.
   return {h, pandoc.RawBlock("latex", "\\setlength{\\parskip}{2pt plus 1pt}")}
  end
+ return h
 end

@@ -16,6 +16,8 @@ Each state update carries forward part of the previous error and adds the error 
 | Output coupling $\Gamma_g$ | Mean squared coefficient that reads the state into the output | A larger coefficient gives a state error more influence on the readout. |
 | Half-range $r_g = 7\,\mathrm{RMS}(h_g)$ | The range used to clip and quantise the state | A wider range makes rounding coarser at the same bit width. |
 
+Here, $h_g$ denotes the state values in group $g$, and RMS (root mean square) measures their typical magnitude over the calibration passage.
+
 LAB combines persistence and output coupling into an allocation score:
 
 $$
@@ -30,7 +32,7 @@ $$
 
 where $c$ sets the total budget. **At the same range, a group with a fourfold score receives one extra bit in this formula; at the same score, a doubled range also calls for one extra bit.** This connects the dynamics of the state to the precision used to store it.
 
-The implementation constructs integer extras from this score, centres them around the target budget, and rounds and limits the widths to 2–16 bits. The achieved mean can therefore differ from the target; the results below report both.
+The implementation constructs integer extras from the score and range, centres them around the target budget, and rounds and limits the widths to 2–16 bits. The achieved mean can therefore differ from the target; the results below report both.
 
 The motivating Lyapunov bound assumes a contraction bound at every step and zero-mean noise uncorrelated with the propagated error. LAB uses calibrated **mean** transition magnitudes as an empirical persistence estimate, while the continuous error model neglects clipping and cross-group error terms. The formula guides allocation under these approximations; its effect on prediction quality is evaluated in the experiments below. [Paper §3: theory, integer allocation, and calibration](LAB.md#3-theory-a-lyapunov-aware-bit-allocator).
 
@@ -43,17 +45,19 @@ We simulated rounding the recurrent state during inference and measured perplexi
 | Six bits for every group | 6.00 | 2.58× | +18.18% to +23.09% |
 | LAB | 5.84–6.35 | 2.44–2.65× | **+3.35% to +3.98%** |
 
-Both compression estimates include the cost of storing each group’s range and bit width, shared across 100 stored states. They describe the recurrent state cache. End-to-end GPU memory and inference speed remain open engineering questions.
+Both compression estimates include the cost of storing each group’s range and bit width, shared across 100 separately stored states. Repeatedly overwriting a single state counts as one stored state, regardless of how many tokens are processed. These estimates describe the recurrent state cache. End-to-end GPU memory and inference speed remain open engineering questions.
 
 ## Does it matter which groups get the bits?
 
-In a separate test on five text windows, we kept each group’s range and shuffled the scores for persistence and output influence across groups. On Mamba-2.8B, LAB and the shuffled rule both averaged **3.96 bits**. Yet the perplexity increase rose from **19.3% to 90.0%** after shuffling. On these windows, the model kept more of its predictive quality when the score went to the group it described.
+In a separate test on five text windows, we kept each group’s range fixed and shuffled the joint score $R_g$ across groups. On Mamba-2.8B, LAB and the shuffled rule both averaged **3.96 bits**. Yet the perplexity increase rose from **19.3% to 90.0%** after shuffling. On these windows, the model kept more of its predictive quality when the score went to the group it described.
 
 ![On Mamba-2.8B, the left panel compares four-bit allocations. LAB and “Shuffle R” both average 3.96 bits, but shuffling raises the perplexity penalty. The right panel shows the six-bit comparison.](figures/fig04_factorisation.png)
 
+*Both panels report the separate five-window evaluation and use a different budget-adjustment procedure from the Mamba-2.8B rerun in the table above. The six-bit LAB penalty here is +4.7%.*
+
 ## How far does the result travel?
 
-Across eight models, LAB gave the lowest perplexity of five allocation rules in **14 of 15** model–budget comparisons. The exception was Zamba2 at six bits, where a simpler rule based on persistence narrowly led.
+Across eight models, LAB gave the lowest perplexity of five allocation rules in **14 of 15** model–budget comparisons at nominal four- and six-bit budgets. These are descriptive rankings of the evaluated windows. Zamba2 was tested only at six bits, with quantisation at chunk boundaries; there, a simpler rule based on persistence narrowly led.
 
 On Mamba-2.8B, LAB also gave lower perplexity than uniform allocation on two matched PG-19 windows at each length from 8K to 32K tokens. On a separate set of four windows at 32K, clipping the state to its calibrated range alone gave slightly lower perplexity than LAB. That comparison shows why clipping also matters when interpreting the long-context result.
 

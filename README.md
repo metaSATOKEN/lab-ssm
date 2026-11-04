@@ -6,6 +6,34 @@ Kentaro Sato · 2 November 2026 · [Paper (PDF)](LAB.pdf) · [Paper (Markdown)](
 
 LAB uses a short calibration passage to estimate how long an error in each state group is likely to persist and how strongly that group influences the output. It combines those estimates with the range of values the group takes to assign its bit width. Across five Mamba-1 sizes, this rule kept the increase in perplexity below 4% on WikiText-2 at a nominal six bits. Giving every group six bits raised perplexity by at least 18% on each model.
 
+## How does LAB decide where the bits go?
+
+Each state update carries forward part of the previous error and adds the error introduced by the current rounding and clipping. LAB uses three measurements from a 1024-token calibration passage to decide which groups need finer precision. A group $g$ is a (channel, state-unit) pair in Mamba-1.
+
+| Calibrated quantity | What it measures | Why it affects the bit allocation |
+|---|---|---|
+| Persistence $\rho_g$ | Mean magnitude of the state transition | A value closer to one suggests that an error will persist longer. |
+| Output coupling $\Gamma_g$ | Mean squared coefficient that reads the state into the output | A larger coefficient gives a state error more influence on the readout. |
+| Half-range $r_g = 7\,\mathrm{RMS}(h_g)$ | The range used to clip and quantise the state | A wider range makes rounding coarser at the same bit width. |
+
+LAB combines persistence and output coupling into an allocation score:
+
+$$
+R_g = \frac{\Gamma_g}{1-\rho_g}.
+$$
+
+In a fine-resolution noise approximation, a group's contribution to squared readout error scales as $R_g r_g^2 4^{-b_g}$. Minimising the sum of these contributions under a fixed total bit budget gives the continuous allocation:
+
+$$
+b_g^\star = c + \frac12\log_2 R_g + \log_2 r_g,
+$$
+
+where $c$ sets the total budget. **At the same range, a group with a fourfold score receives one extra bit in this formula; at the same score, a doubled range also calls for one extra bit.** This connects the dynamics of the state to the precision used to store it.
+
+The implementation constructs integer extras from this score, centres them around the target budget, and rounds and limits the widths to 2–16 bits. The achieved mean can therefore differ from the target; the results below report both.
+
+The motivating Lyapunov bound assumes a contraction bound at every step and zero-mean noise uncorrelated with the propagated error. LAB uses calibrated **mean** transition magnitudes as an empirical persistence estimate, while the continuous error model neglects clipping and cross-group error terms. The formula guides allocation under these approximations; its effect on prediction quality is evaluated in the experiments below. [Paper §3: theory, integer allocation, and calibration](LAB.md#3-theory-a-lyapunov-aware-bit-allocator).
+
 ## How much memory does that save?
 
 We simulated rounding the recurrent state during inference and measured perplexity, a measure of how well the model predicts the next token. Lower is better. The table compares each model with its own FP16 baseline. Six bits was the **target average** for LAB, so the table also shows the width it actually used.

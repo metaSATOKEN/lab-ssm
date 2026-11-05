@@ -1,6 +1,6 @@
 # Lyapunov-Aware Bit Allocation for State-Space Model Quantisation
 
-Kentaro Sato · 2 November 2026 · [Paper (PDF)](LAB.pdf) · [Paper (Markdown)](LAB.md)
+Kentaro Sato · 2 November 2026 · [Paper (PDF)](LAB.pdf) · [Paper (Markdown)](LAB.md) · [DOI: 10.5281/zenodo.20017854](https://doi.org/10.5281/zenodo.20017854)
 
 **If two values in a model’s memory are equally large, should they get the same number of bits?** A Mamba model carries a numerical state from one token to the next. A rounding error in one part of that state can fade by the next token. An error of the same size elsewhere can survive many updates and change a later prediction.
 
@@ -63,4 +63,4 @@ On Mamba-2.8B, LAB also gave lower perplexity than uniform allocation on two mat
 
 The initial integer experiments tested a rule based on persistence and output influence alone. The reruns tested LAB’s revised weighting of that score together with each group’s range and retained the earlier rule for comparison. [Results by model and experiment](docs/RESULTS.md) · [Trace each figure and table to the data](docs/EVIDENCE_MAP.md)
 
-[Experiment scripts](experiments/README.md) · [Saved results](results/README.md) · [License](LICENSE)
+[Experiment scripts](experiments/README.md) · [Saved results](results/README.md) · [Citation metadata](CITATION.cff) · [License](LICENSE)

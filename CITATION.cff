@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "Please cite the LAB preprint when using this repository."
+type: software
+title: "LAB: research code and results for Lyapunov-Aware Bit Allocation"
+authors:
+  - family-names: Sato
+    given-names: Kentaro
+repository-code: "https://github.com/metaSATOKEN/lab-ssm"
+preferred-citation:
+  type: unpublished
+  title: "Lyapunov-Aware Bit Allocation for State-Space Model Quantisation"
+  authors:
+    - family-names: Sato
+      given-names: Kentaro
+  year: 2026
+  doi: "10.5281/zenodo.20017854"

@@ -4,6 +4,8 @@ author: "Kentaro Sato`\\\\`{=latex} `\\texttt{info@metaclan.jp}`{=latex}"
 date: "2026-11-02"
 ---
 
+DOI: [10.5281/zenodo.20017854](https://doi.org/10.5281/zenodo.20017854)
+
 ## Abstract
 
 Quantisation errors in a recurrent state can affect later predictions. LAB assigns bits to state groups using three quantities measured during a short calibration pass: recurrence stability, output coupling, and state magnitude. Across five state-spaces Mamba models, the range-aware allocation at a nominal six bits yielded an estimated 2.44–2.65 times state-cache compression when 100 separately stored states share the same per-group metadata, with perplexity increases of 3.35–3.98% on WikiText-2. At a nominal four bits the corresponding ranges were 3.52–3.96 times and 7.73–10.65%. The recommended allocation had the lowest perplexity increase among the five compared methods on seven models at both budgets; the eighth, Zamba2, was tested at six bits only, where another method was marginally better. An ablation on Mamba-2.8B showed that both the recurrence-based allocation score and the placement of the range correction contributed to performance. On two matched PG-19 windows, the recommended allocation outperformed uniform allocation at each of three context lengths. In a separate four-window comparison at 32K, clipping alone kept perplexity close to the quantised result. These measurements establish a quality–storage trade-off for the tested models; compression is calculated from the stored bit widths, while perplexity is measured with quantisation simulated in the forward pass.
